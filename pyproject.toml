@@ -1,0 +1,13 @@
+[project]
+name = "tech-challenge-3-flights"
+version = "0.1.0"
+description = "Tech Challenge 3 — Pipeline de ML para previsão de atrasos em voos"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"

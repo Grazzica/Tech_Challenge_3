@@ -1,0 +1,33 @@
+# Dados (ficam fora do repo)
+data/raw/
+data/processed/
+*.csv
+*.parquet
+
+
+# Ambiente virtual
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+
+# IDE
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Modelos treinados (se for salvar pkl/joblib)
+*.pkl
+*.joblib
+models/
+
+# Build artifacts
+*.egg-info/
+*.egg
+build/
+dist/
