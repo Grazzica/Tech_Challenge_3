@@ -54,14 +54,13 @@ flowchart TD
     B -->|define decisões de<br/>pré-processamento| C[data_loader.py<br/>Pipeline reproduzível]
     A --> C
     C --> D[(flights_processed.parquet<br/>~5,2M linhas)]
-    D --> E[02_class_model.ipynb<br/>Modelagem]
-    E --> F[Modelagem Supervisionada<br/>Classificação]
-    E --> G[Modelagem Não Supervisionada<br/>Clusterização]
-    F --> H[Comparação de Modelos<br/>+ Apresentação Crítica]
-    G --> H
+    D --> E[02_class_model_supervised.ipynb<br/>Classificação]
+    A --> F[03_class_model_unsupervised.ipynb<br/>Clusterização de aeroportos]
+    E --> G[Comparação de Modelos<br/>+ Apresentação Crítica]
+    F --> H[Perfis de Aeroportos<br/>+ Apresentação Crítica]
 ```
 
-> O fluxo reflete a ordem real do desenvolvimento: a **análise exploratória** (`01_eda.ipynb`) foi realizada primeiro e definiu as decisões de limpeza, seleção de features e tratamento de leakage. Essas decisões foram então implementadas no `data_loader.py`, que gera o dataset processado consumido pela modelagem.
+> O fluxo reflete a ordem real do desenvolvimento: a **análise exploratória** (`01_eda.ipynb`) foi realizada primeiro e definiu as decisões de limpeza, seleção de features e tratamento de leakage. Essas decisões foram implementadas no `data_loader.py`, que gera o dataset processado consumido pela **classificação** (`02`). A **clusterização** (`03`) parte do CSV bruto, pois utiliza features distintas — incluindo variáveis pós-voo (causas de atraso) que seriam leakage na classificação, mas são válidas em uma análise descritiva.
 
 ---
 
@@ -80,15 +79,7 @@ flowchart LR
     G --> H[(Parquet<br/>processado)]
 ```
 
-**Funil de remoção de linhas:**
-
-| Etapa | Linhas |
-|:---|---:|
-| Base original | 5.819.079 |
-| Após remover cancelados/desviados | −105.071 |
-| Após remover `SCHEDULED_TIME` nulo | −6 |
-| Após remover códigos de aeroporto inválidos (mixed types) | −482.872 |
-| **Dataset final** | **5.231.130** |
+**Funil de remoção de linhas:** voos cancelados/desviados, registros com `SCHEDULED_TIME` nulo e códigos de aeroporto em formato inválido são removidos, reduzindo a base de ~5,8M para ~5,2M de linhas. O detalhamento por etapa está documentado no notebook `01_eda.ipynb`.
 
 ---
 
@@ -103,8 +94,9 @@ Tech_challenge_3/
 │   │   └── airlines.csv
 │   └── processed/           # Dados processados (parquet)
 ├── notebooks/
-│   ├── 01_eda.ipynb         # Análise exploratória
-│   └── 02_class_model.ipynb # Modelagem supervisionada + não supervisionada
+│   ├── 01_eda.ipynb                       # Análise exploratória
+│   ├── 02_class_model_supervised.ipynb    # Modelagem supervisionada (classificação)
+│   └── 03_class_model_unsupervised.ipynb  # Modelagem não supervisionada (clusterização)
 ├── src/
 │   ├── __init__.py
 │   └── data_loader.py       # Pipeline de pré-processamento
@@ -134,12 +126,14 @@ pip install -e .
 
 # 4. Executar os notebooks na ordem
 #    notebooks/01_eda.ipynb
-#    notebooks/02_class_model.ipynb
+#    notebooks/02_class_model_supervised.ipynb
+#    notebooks/03_class_model_unsupervised.ipynb
 ```
 
-> O `02_class_model.ipynb` gera o parquet processado na primeira execução
+> O `02_class_model_supervised.ipynb` gera o parquet processado na primeira execução
 > (via `data_loader.load_flights`). Execuções seguintes podem ler o parquet
-> diretamente para maior velocidade.
+> diretamente para maior velocidade. O `03_class_model_unsupervised.ipynb` parte
+> diretamente do `flights.csv`, pois usa um conjunto de features próprio.
 
 ---
 
@@ -151,18 +145,20 @@ pip install -e .
 - Seleção de features com base na relação com o target
 - Definição das decisões de pré-processamento
 
-### Modelagem Supervisionada (`02_class_model.ipynb`)
+### Modelagem Supervisionada (`02_class_model_supervised.ipynb`)
 - **Baseline:** `DummyClassifier` (referência mínima)
 - **Modelos comparados:** Decision Tree e Random Forest
 - **Seleção de hiperparâmetro:** curva de validação (método do cotovelo para *max_depth*)
 - **Tratamento de desbalanceamento:** `class_weight='balanced'`
 - **Avaliação:** precision, recall e F1 da classe de interesse (não apenas acurácia)
 
-### Modelagem Não Supervisionada
+### Modelagem Não Supervisionada (`03_class_model_unsupervised.ipynb`)
 - **Técnica:** K-Means (clusterização de aeroportos por perfil operacional)
+- **Unidade de análise:** aeroporto de origem (voos agregados por `ORIGIN_AIRPORT`)
+- **Features (9):** volume de voos, taxa de atraso, atraso médio, taxa de cancelamento, tempo médio de táxi e decomposição das causas de atraso (tráfego aéreo, companhia, clima, efeito cascata)
+- **Pré-processamento:** padronização (StandardScaler); aeroportos com menos de 1.000 voos descartados
 - **Seleção de K:** método do cotovelo
-- **Features:** volume de voos, taxa de atraso, distância média, atraso médio
-- **Pré-processamento:** padronização (StandardScaler)
+- **Visualização:** PCA (redução para 2 dimensões)
 
 ---
 
@@ -178,18 +174,29 @@ Apesar de ser o melhor modelo, o F1 de 0,45 indica desempenho limitado em termos
 
 ### Clusterização (perfis de aeroportos)
 
-O K-Means agrupou os aeroportos de origem em **3 perfis com características bem definidas**: grandes hubs (alto volume e longas distâncias), regionais críticos (baixo volume e baixa pontualidade) e regionais eficientes (baixo volume e alta pontualidade). Apesar de existir uma zona difusa entre dois dos grupos (em torno de 18% de taxa de atraso), a separação manteve consistência.
+O K-Means agrupou 225 aeroportos (com volume ≥ 1.000 voos) em **4 perfis distintos**. O achado mais relevante é que os grupos não se separam apenas por tamanho, mas principalmente pela **causa dominante do atraso**:
 
-**As duas análises se reforçam:** a clusterização confirmou que a feature `ORIGIN_AIRPORT` é de fato relevante para o objetivo de classificação, ao revelar que existem aeroportos estruturalmente mais propensos a atraso.
+| Cluster | Perfil | Característica principal |
+|:---|:---|:---|
+| Eficientes | Porte médio, melhor desempenho | Menor taxa de atraso e menor atraso médio (ex: SAN, TPA, BNA) |
+| Mega Hubs | Volume gigantesco | Atrasos ligados à própria companhia (ex: ATL, ORD, DFW, DEN, LAX) |
+| Alto Atraso | Pior desempenho do ano | Maior atraso médio e maior taxa de cancelamento (ex: MDW, DAL, HOU) |
+| Sensíveis a Tráfego Aéreo | Gargalo de espaço aéreo | Causa dominante é o controle de tráfego (ex: DCA, CLE, RDU, MKE) |
+
+O PCA foi utilizado para projetar os 9 atributos em 2 dimensões e visualizar os agrupamentos, preservando cerca de 49% da variância.
+
+**As duas análises se complementam:** a clusterização confirma que a feature `ORIGIN_AIRPORT` é relevante para a classificação, ao revelar que existem aeroportos estruturalmente mais propensos a atraso — e que a natureza desse atraso varia conforme o perfil do aeroporto.
 
 ---
 
 ## Limitações e Próximos Passos
 
 ### Limitações
-- **Teto de features:** variáveis pré-voo não capturam as causas reais do atraso (clima, falhas mecânicas, efeito cascata). Três algoritmos diferentes atingiram o mesmo limite de desempenho.
+- **Teto de features (classificação):** variáveis pré-voo não capturam as causas reais do atraso (clima, falhas mecânicas, efeito cascata). Os algoritmos testados atingiram limite de desempenho semelhante.
 - **Desempenho absoluto:** F1 de 0,45 — o modelo captura ~54% dos atrasos, insuficiente para produção sem melhorias.
 - **Recursos computacionais:** RAM limitou os hiperparâmetros da Random Forest (50 árvores, profundidade 20).
+- **Cobertura da clusterização:** o dataset usa dois formatos de código de aeroporto (IATA e numérico do BTS); como o `airports.csv` cobre apenas o IATA, parte dos registros foi descartada na análise não supervisionada.
+- **Escolha de K (clusterização):** o método do cotovelo não apresentou um ponto de inflexão nítido; K=4 foi escolhido com peso na interpretabilidade dos perfis.
 
 ### Próximos Passos
 - Enriquecer a base com features de maior impacto: clima, congestionamento por horário, feriados, efeito cascata da aeronave.
@@ -203,9 +210,9 @@ O K-Means agrupou os aeroportos de origem em **3 perfis com características bem
 ## Tecnologias
 
 - **Python** 3.12
-- **pandas** — manipulação de dados
-- **scikit-learn** — modelagem (classificação, clusterização, métricas)
-- **matplotlib** — visualização
+- **pandas** / **numpy** — manipulação de dados
+- **scikit-learn** — modelagem (classificação, clusterização K-Means, PCA, métricas)
+- **matplotlib** / **seaborn** — visualização
 - **pyarrow** — armazenamento em Parquet
 - **Jupyter** — notebooks de análise
 
