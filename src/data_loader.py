@@ -6,7 +6,7 @@ COLUMNS_TO_DROP = ['YEAR', 'FLIGHT_NUMBER', 'TAIL_NUMBER', 'SCHEDULED_ARRIVAL', 
                    'WHEELS_OFF', 'ELAPSED_TIME', 'AIR_TIME', 'WHEELS_ON', 'TAXI_IN', 'ARRIVAL_TIME', 'AIR_SYSTEM_DELAY', 'SECURITY_DELAY', 'AIRLINE_DELAY', 'LATE_AIRCRAFT_DELAY',
                    'WEATHER_DELAY', 'CANCELLATION_REASON', 'CANCELLED', 'DIVERTED']
 
-# Fução para carregar e salvar cópia processada em parquet se desejável 
+# Função para carregar e salvar cópia processada em parquet se desejável 
 
 def load_flights(input_path, output_path= None):
    df = pd.read_csv(input_path)
