@@ -220,7 +220,7 @@ O PCA foi utilizado para projetar os 9 atributos em 2 dimensões e visualizar os
 
 ## Deploy
 
-- **Vídeo de apresentação disponível em:** _(adicionar link)_
+- **Vídeo de apresentação disponível em:** https://youtu.be/Od04yPuuBuk
 
 ---
 
